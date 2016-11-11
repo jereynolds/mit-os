@@ -11,6 +11,8 @@
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
 
+#define STACK_TOP 0xf0110000
+
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
 
@@ -24,6 +26,7 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+  { "backtrace", "Display stack backtrace", mon_backtrace },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -58,10 +61,30 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
-	// Your code here.
+  uint32_t *base_ptr = (uint32_t*) read_ebp();
+
+  // Looping over stack frames
+  while ((int)base_ptr < STACK_TOP && (int)base_ptr != 0)
+  {
+    uint32_t *prev_base = (uint32_t*) *base_ptr;
+    uint32_t *ret_ptr = (uint32_t*) *(base_ptr + 1);
+    uint32_t *arg_list = base_ptr + 2;
+
+    cprintf("ebp %08x eip %08x args ", base_ptr, ret_ptr);
+
+    // Looping over the args in the current frame
+    int i;
+    for (i = 0; i < 5; i++, arg_list++)
+    {
+      cprintf("%08x ", *arg_list);
+    }
+    cprintf("\n");
+
+    base_ptr = prev_base;
+  }
+
 	return 0;
 }
-
 
 
 /***** Kernel monitor command interpreter *****/
