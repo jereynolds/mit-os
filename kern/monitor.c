@@ -80,6 +80,20 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
     }
     cprintf("\n");
 
+    struct Eipdebuginfo info;
+    struct Eipdebuginfo *info_ptr = &info;
+    debuginfo_eip((uintptr_t)ret_ptr, info_ptr);
+
+    char *format_str = "%s:%d: %.*s+%d\n";
+
+    const char *filename = info_ptr->eip_file;
+    int line_num = info_ptr->eip_line;
+    int name_length = info_ptr->eip_fn_namelen;
+    const char *func_name = info_ptr->eip_fn_name;
+    int offset = (int)ret_ptr - info_ptr->eip_fn_addr;
+
+    cprintf(format_str, filename, line_num, name_length, func_name, offset);
+
     base_ptr = prev_base;
   }
 
