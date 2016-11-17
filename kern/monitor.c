@@ -15,6 +15,10 @@
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
+void mon_print_frame_descr(uint32_t*);
+void mon_print_frame(uint32_t*, uint32_t*);
+void mon_print_symbols(uint32_t*);
+
 
 struct Command {
 	const char *name;
@@ -61,38 +65,14 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
+  // Capture stack frame base pointer for the frame for this function
   uint32_t *base_ptr = (uint32_t*) read_ebp();
 
   // Looping over stack frames
   while ((int)base_ptr < STACK_TOP && (int)base_ptr != 0)
   {
     uint32_t *prev_base = (uint32_t*) *base_ptr;
-    uint32_t *ret_ptr = (uint32_t*) *(base_ptr + 1);
-    uint32_t *arg_list = base_ptr + 2;
-
-    cprintf("ebp %08x eip %08x args ", base_ptr, ret_ptr);
-
-    // Looping over the args in the current frame
-    int i;
-    for (i = 0; i < 5; i++, arg_list++)
-    {
-      cprintf("%08x ", *arg_list);
-    }
-    cprintf("\n");
-
-    struct Eipdebuginfo info;
-    struct Eipdebuginfo *info_ptr = &info;
-    debuginfo_eip((uintptr_t)ret_ptr, info_ptr);
-
-    char *format_str = "%s:%d: %.*s+%d\n";
-
-    const char *filename = info_ptr->eip_file;
-    int line_num = info_ptr->eip_line;
-    int name_length = info_ptr->eip_fn_namelen;
-    const char *func_name = info_ptr->eip_fn_name;
-    int offset = (int)ret_ptr - info_ptr->eip_fn_addr;
-
-    cprintf(format_str, filename, line_num, name_length, func_name, offset);
+    mon_print_frame_descr(base_ptr);
 
     base_ptr = prev_base;
   }
@@ -100,6 +80,64 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+void
+mon_print_frame(uint32_t *base_ptr, uint32_t *ret_ptr)
+{
+  // arg_list: Pointer to topmost argument pushed by calling function
+  uint32_t *arg_list = base_ptr + 2;
+
+  // Print current frame base pointer nd return point to calling function
+  cprintf("ebp %08x eip %08x args ", base_ptr, ret_ptr);
+
+  // Looping over the args in the current frame
+  // We don't know how many args there are, so grab five
+  int i;
+  for (i = 0; i < 5; i++, arg_list++)
+  {
+    cprintf("%08x ", *arg_list);
+  }
+  cprintf("\n");
+
+  return;
+}
+
+void
+mon_print_symbols(uint32_t *ret_ptr)
+{
+  // Allocate an Eipdebuginfo struct on the stack and get a pointer to it
+  struct Eipdebuginfo info;
+  struct Eipdebuginfo *info_ptr = &info;
+
+  // Populate the info struct
+  debuginfo_eip((uintptr_t)ret_ptr, info_ptr);
+
+  // `Filename:line_number Function_name+offset` where offset is in bytes
+  char *format_str = "%s:%d: %.*s+%d\n";
+
+  const char *filename = info_ptr->eip_file;
+  int line_num = info_ptr->eip_line;
+  int name_length = info_ptr->eip_fn_namelen;
+  const char *func_name = info_ptr->eip_fn_name;
+
+  // Offset of return point from the function prolog
+  int offset = (int)ret_ptr - info_ptr->eip_fn_addr;
+
+  cprintf(format_str, filename, line_num, name_length, func_name, offset);
+
+  return;
+}
+
+void
+mon_print_frame_descr(uint32_t *base_ptr)
+{
+  // Return pointer to previous stack frame
+  uint32_t *ret_ptr = (uint32_t*) *(base_ptr + 1);
+
+  mon_print_frame(base_ptr, ret_ptr);
+  mon_print_symbols(ret_ptr);
+
+  return;
+}
 
 /***** Kernel monitor command interpreter *****/
 
