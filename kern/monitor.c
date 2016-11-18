@@ -11,8 +11,6 @@
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
 
-#define STACK_TOP 0xf0110000
-
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
 void mon_print_frame_descr(uint32_t*);
@@ -69,7 +67,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
   uint32_t *base_ptr = (uint32_t*) read_ebp();
 
   // Looping over stack frames
-  while ((int)base_ptr < STACK_TOP && (int)base_ptr != 0)
+  while ((int)base_ptr != 0)
   {
     uint32_t *prev_base = (uint32_t*) *base_ptr;
     mon_print_frame_descr(base_ptr);
